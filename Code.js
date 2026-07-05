@@ -5,8 +5,9 @@
  * (default Graphite) or a "#buffer" description tag; for each, maintains
  * Busy "Block" events before and after it on the Block calendar. The sync is
  * a stateless reconcile — buffers follow the source event when it moves, and
- * disappear when it is deleted or un-tagged. Runs on a calendar-update
- * trigger plus an hourly sweep (see install()).
+ * disappear when it is deleted or un-tagged. Every run also purges all past
+ * events from the Block calendar, hand-made ones included. Runs on a
+ * calendar-update trigger plus an hourly sweep (see install()).
  *
  * Tag an event:   right-click → Graphite color, or "#buffer" in the description
  * Custom padding: "#buffer 15/60" in the description = 15 min before / 60 after;
@@ -81,8 +82,25 @@ function reconcileLocked() {
     }
   }
 
+  // Purge everything on the Block calendar that already ended — hand-made
+  // events included, this is the one place the script touches them. Keeps
+  // the calendar (and the managed listing below) from growing forever.
+  let purged = 0;
+  const pastEvents = listEvents(blockCalendarId, {
+    timeMax: now.toISOString(),
+    singleEvents: true, // a past instance of a recurring event dies alone
+  });
+  for (const event of pastEvents) {
+    // timeMax matches on start time, so skip events still in progress
+    const end = new Date(event.end.dateTime || event.end.date);
+    if (end > now) continue;
+    Calendar.Events.remove(blockCalendarId, event.id);
+    purged++;
+  }
+
   // Existing state: all future managed buffers, unbounded so orphans from
-  // sources moved beyond the horizon still get cleaned up
+  // sources moved beyond the horizon still get cleaned up (the purge above
+  // already handled the past)
   const existing = new Map();
   const managed = listEvents(blockCalendarId, {
     timeMin: now.toISOString(),
@@ -138,7 +156,8 @@ function reconcileLocked() {
   }
 
   console.log(
-    `${desired.size} buffers desired: ${created} created, ${updated} updated, ${existing.size} removed`
+    `${desired.size} buffers desired: ${created} created, ${updated} updated, ` +
+      `${existing.size} removed, ${purged} past events purged`
   );
 }
 

@@ -8,7 +8,9 @@ events appear on the **Block** calendar before and after it, availability set
 to Busy. The sync is a stateless reconcile, so the buffers track the source
 event for the rest of its life: move the event and they follow, delete or
 un-tag it and they disappear. Buffer events carry a private marker; anything
-you created on the Block calendar by hand is never touched.
+you created on the Block calendar by hand is left alone until it's over —
+every run purges all past events from the Block calendar, hand-made ones
+included, so the calendar never accumulates history.
 
 ## Usage
 
