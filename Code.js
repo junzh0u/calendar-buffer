@@ -17,8 +17,8 @@
  * Optional script properties (Project Settings → Script properties):
  *   TAG_COLOR_ID (default 8 = Graphite), BLOCK_CALENDAR_NAME (default Block),
  *   BUFFER_TITLE (default Block), DEFAULT_BUFFER ("30" or "15/60", default
- *   30/30), WATCHED_CALENDARS (comma-separated calendar IDs, default primary —
- *   re-run install() after changing it so the calendar triggers match)
+ *   30/30), WATCHED_CALENDARS (comma-separated calendar names or IDs, default
+ *   primary — re-run install() after changing it so the calendar triggers match)
  */
 
 // Marker stored in each managed event's private extended properties; manual
@@ -29,12 +29,12 @@ const SCRIPT_PROPS = PropertiesService.getScriptProperties();
 
 // Overridable via script properties of the same name (Project Settings →
 // Script properties) — no redeploy needed. WATCHED_CALENDARS is a
-// comma-separated list of calendar IDs; re-run install() after changing it
-// so the calendar triggers match. Color IDs 1-11:
+// comma-separated list of calendar names or IDs; re-run install() after
+// changing it so the calendar triggers match. Color IDs 1-11:
 // https://developers.google.com/apps-script/reference/calendar/event-color
 const WATCHED_CALENDARS = (SCRIPT_PROPS.getProperty('WATCHED_CALENDARS') || 'primary')
   .split(',')
-  .map((calendarId) => calendarId.trim());
+  .map((calendar) => resolveCalendarId(calendar.trim()));
 const BLOCK_CALENDAR_NAME = SCRIPT_PROPS.getProperty('BLOCK_CALENDAR_NAME') || 'Block';
 const BUFFER_TITLE = SCRIPT_PROPS.getProperty('BUFFER_TITLE') || 'Block';
 const TAG_COLOR_ID = SCRIPT_PROPS.getProperty('TAG_COLOR_ID') || '8'; // Graphite
@@ -60,7 +60,7 @@ function reconcile() {
 function reconcileLocked() {
   const now = new Date();
   const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * MS_PER_MINUTE);
-  const blockCalendarId = getBlockCalendarId();
+  const blockCalendarId = resolveCalendarId(BLOCK_CALENDAR_NAME);
 
   // Desired state: a pre and post buffer for every tagged event in the horizon
   const desired = new Map();
@@ -202,11 +202,15 @@ function isDeclined(event) {
   return self !== undefined && self.responseStatus === 'declined';
 }
 
-/** Resolve the Block calendar by name so no calendar ID lives in the code. */
-function getBlockCalendarId() {
-  const calendars = CalendarApp.getCalendarsByName(BLOCK_CALENDAR_NAME);
+/**
+ * Resolve a calendar name to its ID so no ID has to live in config;
+ * "primary" and anything with an "@" is already an ID and passes through.
+ */
+function resolveCalendarId(nameOrId) {
+  if (nameOrId === 'primary' || nameOrId.includes('@')) return nameOrId;
+  const calendars = CalendarApp.getCalendarsByName(nameOrId);
   if (calendars.length !== 1) {
-    throw new Error(`Expected exactly one calendar named "${BLOCK_CALENDAR_NAME}", found ${calendars.length}`);
+    throw new Error(`Expected exactly one calendar named "${nameOrId}", found ${calendars.length}`);
   }
   return calendars[0].getId();
 }

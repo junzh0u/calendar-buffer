@@ -46,7 +46,7 @@ via script properties (Project Settings → Script properties):
 | `DEFAULT_BUFFER` | `30/30` | Padding minutes when the event has no `#buffer` override — `45` = both sides, `15/60` = before/after |
 | `BLOCK_CALENDAR_NAME` | `Block` | Calendar the buffers are written to |
 | `BUFFER_TITLE` | `Block` | Title of the buffer events (existing buffers are renamed on the next sweep) |
-| `WATCHED_CALENDARS` | `primary` | Comma-separated calendar IDs to scan; re-run `install()` after changing so the triggers match |
+| `WATCHED_CALENDARS` | `primary` | Comma-separated calendar names or IDs to scan; re-run `install()` after changing so the triggers match |
 
 `install()` creates one update trigger per watched calendar, so the trigger
 set is fixed at install time. If you change `WATCHED_CALENDARS` without
@@ -55,6 +55,8 @@ on the hourly sweep instead of within seconds, and a removed calendar's
 trigger keeps firing harmlessly. `install()` is idempotent (it deletes all
 project triggers before recreating), so re-run it anytime.
 
+Calendars can be listed by name (`Family`) as long as exactly one calendar
+has that name; `primary` and anything containing an `@` is treated as an ID.
 To find a calendar's ID: in [Google Calendar](https://calendar.google.com),
 hover the calendar under **My calendars** → **⋮** → **Settings and sharing**
 → **Integrate calendar** → **Calendar ID**. Your primary calendar's ID is

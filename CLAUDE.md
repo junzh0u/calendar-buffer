@@ -19,7 +19,8 @@ color-tagged Google Calendar events. What/why and usage: see README.md.
 - Uses the **Calendar advanced service** (manifest `enabledAdvancedServices`),
   not `CalendarApp`, for `transparency`, `extendedProperties`, and
   `singleEvents` recurrence expansion. `CalendarApp` is used only to resolve
-  the Block calendar by name (keeps the calendar ID out of the public repo).
+  calendar names to IDs (keeps calendar IDs out of the public repo; entries
+  with an `@` or the literal `primary` pass through as IDs).
 - Triggers (created by `install()`): `forUserCalendar(...).onEventUpdated()`
   fires on any change to the watched calendar — including the tagging color
   click itself — plus an hourly time-based sweep. The script only *writes* to
