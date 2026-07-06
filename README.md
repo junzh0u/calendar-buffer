@@ -47,3 +47,17 @@ via script properties (Project Settings → Script properties):
 | `BLOCK_CALENDAR_NAME` | `Block` | Calendar the buffers are written to |
 | `BUFFER_TITLE` | `Block` | Title of the buffer events (existing buffers are renamed on the next sweep) |
 | `WATCHED_CALENDARS` | `primary` | Comma-separated calendar IDs to scan; re-run `install()` after changing so the triggers match |
+
+`install()` creates one update trigger per watched calendar, so the trigger
+set is fixed at install time. If you change `WATCHED_CALENDARS` without
+re-running it, nothing breaks — a newly added calendar still syncs, but only
+on the hourly sweep instead of within seconds, and a removed calendar's
+trigger keeps firing harmlessly. `install()` is idempotent (it deletes all
+project triggers before recreating), so re-run it anytime.
+
+To find a calendar's ID: in [Google Calendar](https://calendar.google.com),
+hover the calendar under **My calendars** → **⋮** → **Settings and sharing**
+→ **Integrate calendar** → **Calendar ID**. Your primary calendar's ID is
+your email address (the literal `primary` also works). Secondary calendars
+have IDs like `abc123def456@group.calendar.google.com` — use the whole
+thing, including the `@group.calendar.google.com` suffix.
