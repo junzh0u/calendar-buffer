@@ -17,12 +17,14 @@
  *                 "#buffer 45" = 45 both sides; "#buffer 0" = no buffers even
  *                 while the color tag stays on
  *
+ * Block events are titled by their length: "30m buffer", "3h 30m buffer".
+ *
  * Optional script properties (Project Settings → Script properties):
  *   TAG_COLOR_ID (default 8 = Graphite), BLOCK_CALENDAR_NAME (default Block),
- *   BUFFER_TITLE (default Block), DEFAULT_BUFFER ("30" or "15/60", default
- *   30/30, capped at the event's own duration — an explicit #buffer isn't),
- *   WATCHED_CALENDARS (comma-separated calendar names or IDs, default
- *   primary — re-run install() after changing it so the calendar triggers match)
+ *   DEFAULT_BUFFER ("30" or "15/60", default 30/30, capped at the event's
+ *   own duration — an explicit #buffer isn't), WATCHED_CALENDARS
+ *   (comma-separated calendar names or IDs, default primary — re-run
+ *   install() after changing it so the calendar triggers match)
  */
 
 // Marker stored in each managed event's private extended properties; manual
@@ -40,7 +42,6 @@ const WATCHED_CALENDARS = (SCRIPT_PROPS.getProperty('WATCHED_CALENDARS') || 'pri
   .split(',')
   .map((calendar) => resolveCalendarId(calendar.trim()));
 const BLOCK_CALENDAR_NAME = SCRIPT_PROPS.getProperty('BLOCK_CALENDAR_NAME') || 'Block';
-const BUFFER_TITLE = SCRIPT_PROPS.getProperty('BUFFER_TITLE') || 'Block';
 const TAG_COLOR_ID = SCRIPT_PROPS.getProperty('TAG_COLOR_ID') || '8'; // Graphite
 // Same notation as the #buffer override: "45" = both sides, "15/60" = before/after
 const DEFAULT_BUFFER = parsePadding(SCRIPT_PROPS.getProperty('DEFAULT_BUFFER') || '30/30');
@@ -134,7 +135,7 @@ function reconcileLocked() {
     if (have === undefined) {
       Calendar.Events.insert(
         {
-          summary: BUFFER_TITLE,
+          summary: want.summary,
           description: want.description,
           start: { dateTime: want.start.toISOString() },
           end: { dateTime: want.end.toISOString() },
@@ -149,11 +150,11 @@ function reconcileLocked() {
       new Date(have.start.dateTime).getTime() !== want.start.getTime() ||
       new Date(have.end.dateTime).getTime() !== want.end.getTime() ||
       have.description !== want.description ||
-      have.summary !== BUFFER_TITLE // propagate a BUFFER_TITLE property change
+      have.summary !== want.summary
     ) {
       Calendar.Events.patch(
         {
-          summary: BUFFER_TITLE,
+          summary: want.summary,
           description: want.description,
           start: { dateTime: want.start.toISOString() },
           end: { dateTime: want.end.toISOString() },
@@ -248,6 +249,7 @@ function mergeBuffers(buffers) {
     desired.set(blockKey(block.keys), {
       start: block.start,
       end: block.end,
+      summary: blockTitle(block.start, block.end),
       description: `Buffer for ${block.titles.map((title) => `"${title}"`).join(', ')}`,
     });
   };
@@ -267,6 +269,15 @@ function mergeBuffers(buffers) {
 
 function bufferKey(sourceId, role) {
   return `${sourceId}:${role}`;
+}
+
+/** Title a block by its length: "30m buffer", "1h buffer", "3h 30m buffer". */
+function blockTitle(start, end) {
+  const minutes = Math.round((end - start) / MS_PER_MINUTE);
+  const parts = [];
+  if (minutes >= 60) parts.push(`${Math.floor(minutes / 60)}h`);
+  if (minutes % 60 > 0 || minutes < 60) parts.push(`${minutes % 60}m`);
+  return `${parts.join(' ')} buffer`;
 }
 
 /**

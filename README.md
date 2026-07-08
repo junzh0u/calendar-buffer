@@ -3,9 +3,9 @@
 Google Apps Script that maintains Busy buffer events around tagged Google
 Calendar events, replacing the manual click-dance of creating them yourself.
 
-Tag an event on your primary calendar and, within seconds, matching "Block"
-events appear on the **Block** calendar before and after it, availability set
-to Busy. The sync is a stateless reconcile, so the buffers track the source
+Tag an event on your primary calendar and, within seconds, matching buffer
+events — titled by their length, like "30m buffer" — appear on the **Block**
+calendar before and after it, availability set to Busy. The sync is a stateless reconcile, so the buffers track the source
 event for the rest of its life: move the event and they follow, delete or
 un-tag it and they disappear. Buffer events carry a private marker; anything
 you created on the Block calendar by hand is left alone until it's over —
@@ -50,7 +50,6 @@ via script properties (Project Settings → Script properties):
 | `TAG_COLOR_ID` | `8` (Graphite) | [Color ID 1–11](https://developers.google.com/apps-script/reference/calendar/event-color) that marks an event for buffering |
 | `DEFAULT_BUFFER` | `30/30` | Padding minutes when the event has no `#buffer` override — `45` = both sides, `15/60` = before/after; capped at the event's own duration (an explicit `#buffer` isn't) |
 | `BLOCK_CALENDAR_NAME` | `Block` | Calendar the buffers are written to |
-| `BUFFER_TITLE` | `Block` | Title of the buffer events (existing buffers are renamed on the next sweep) |
 | `WATCHED_CALENDARS` | `primary` | Comma-separated calendar names or IDs to scan; re-run `install()` after changing so the triggers match |
 
 `install()` creates one update trigger per watched calendar, so the trigger
