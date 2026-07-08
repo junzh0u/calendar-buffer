@@ -4,8 +4,9 @@
  * Watches the primary calendar for events tagged with the reserved color
  * (default Graphite) or a "#buffer" description tag; for each, maintains
  * Busy "Block" events before and after it on the Block calendar. Buffers
- * that overlap or touch merge into a single block, so back-to-back tagged
- * meetings get one continuous event instead of a pile. The sync is
+ * only claim free time: they shrink out of the way of real Busy events on
+ * the watched calendars, and buffers that overlap or touch each other merge
+ * into a single block. The sync is
  * a stateless reconcile — buffers follow the source event when it moves, and
  * disappear when it is deleted or un-tagged. Every run also purges all past
  * events from the Block calendar, hand-made ones included. Runs on a
@@ -65,8 +66,10 @@ function reconcileLocked() {
   const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * MS_PER_MINUTE);
   const blockCalendarId = resolveCalendarId(BLOCK_CALENDAR_NAME);
 
-  // Wanted buffers: a pre and post buffer for every tagged event in the horizon
-  const buffers = [];
+  // Wanted buffers: a pre and post buffer for every tagged event in the
+  // horizon, plus the Busy intervals buffers must stay clear of
+  const rawBuffers = [];
+  const busy = [];
   for (const calendarId of WATCHED_CALENDARS) {
     const events = listEvents(calendarId, {
       timeMin: now.toISOString(),
@@ -74,18 +77,22 @@ function reconcileLocked() {
       singleEvents: true, // expand recurring events; each instance gets buffers
     });
     for (const event of events) {
-      if (!event.start.dateTime) continue; // all-day events don't get buffers
-      const padding = bufferMinutes(event);
-      if (padding === null) continue;
+      if (!event.start.dateTime) continue; // all-day events: no buffers, and they don't block any
       if (isDeclined(event)) continue;
       const start = new Date(event.start.dateTime);
       const end = new Date(event.end.dateTime);
-      addBuffer(buffers, event, 'pre', new Date(start.getTime() - padding.before * MS_PER_MINUTE), start, now);
-      addBuffer(buffers, event, 'post', end, new Date(end.getTime() + padding.after * MS_PER_MINUTE), now);
+      if (event.transparency !== 'transparent') busy.push({ start, end });
+      const padding = bufferMinutes(event);
+      if (padding === null) continue;
+      addBuffer(rawBuffers, event, 'pre', new Date(start.getTime() - padding.before * MS_PER_MINUTE), start, now);
+      addBuffer(rawBuffers, event, 'post', end, new Date(end.getTime() + padding.after * MS_PER_MINUTE), now);
     }
   }
 
-  // Desired state: overlapping or touching buffers merged into single blocks
+  // Desired state: buffers shrunk out of the time Busy events occupy — a
+  // buffer only pads free time — then overlapping or touching survivors
+  // merged into single blocks
+  const buffers = rawBuffers.map((buffer) => shrinkBuffer(buffer, busy, now)).filter((buffer) => buffer !== null);
   const desired = mergeBuffers(buffers);
 
   // Purge everything on the Block calendar that already ended — hand-made
@@ -201,10 +208,31 @@ function addBuffer(buffers, source, role, start, end, now) {
   if (end <= start || end <= now) return;
   buffers.push({
     key: bufferKey(source.id, role),
+    role,
     start,
     end,
     title: source.summary || '(untitled)',
   });
+}
+
+/**
+ * Shrink a buffer out of the time Busy events occupy: a pre buffer keeps
+ * only the free time immediately before its meeting, a post buffer the free
+ * time immediately after. Returns null when nothing is left — a meeting
+ * butted right against the source event leaves no room to pad.
+ */
+function shrinkBuffer(buffer, busy, now) {
+  let { start, end } = buffer;
+  for (const interval of busy) {
+    if (interval.start >= end || interval.end <= start) continue; // no collision
+    if (buffer.role === 'pre') {
+      start = interval.end;
+    } else {
+      end = interval.start;
+    }
+  }
+  if (end <= start || end <= now) return null;
+  return { ...buffer, start, end };
 }
 
 /**

@@ -6,7 +6,8 @@ color-tagged Google Calendar events. What/why and usage: see README.md.
 ## Architecture
 
 - Single stateless `reconcile()`: desired buffers (from tagged events in the
-  next `HORIZON_DAYS`, overlapping/touching ones merged into single blocks)
+  next `HORIZON_DAYS`, shrunk out of the way of Busy events on the watched
+  calendars, then overlapping/touching ones merged into single blocks)
   diffed against existing managed buffers (all future, unbounded — so
   orphans from sources moved beyond the horizon still get cleaned up).
   Insert/patch/remove the difference; no stored state.
