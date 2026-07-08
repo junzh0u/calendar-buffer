@@ -17,7 +17,8 @@
  * Optional script properties (Project Settings → Script properties):
  *   TAG_COLOR_ID (default 8 = Graphite), BLOCK_CALENDAR_NAME (default Block),
  *   BUFFER_TITLE (default Block), DEFAULT_BUFFER ("30" or "15/60", default
- *   30/30), WATCHED_CALENDARS (comma-separated calendar names or IDs, default
+ *   30/30, capped at the event's own duration — an explicit #buffer isn't),
+ *   WATCHED_CALENDARS (comma-separated calendar names or IDs, default
  *   primary — re-run install() after changing it so the calendar triggers match)
  */
 
@@ -71,9 +72,9 @@ function reconcileLocked() {
       singleEvents: true, // expand recurring events; each instance gets buffers
     });
     for (const event of events) {
+      if (!event.start.dateTime) continue; // all-day events don't get buffers
       const padding = bufferMinutes(event);
       if (padding === null) continue;
-      if (!event.start.dateTime) continue; // all-day events don't get buffers
       if (isDeclined(event)) continue;
       const start = new Date(event.start.dateTime);
       const end = new Date(event.end.dateTime);
@@ -169,8 +170,15 @@ function reconcileLocked() {
 function bufferMinutes(event) {
   const match = (event.description || '').match(/#buffer\b(?:\s+(\d+(?:\s*\/\s*\d+)?))?/i);
   if (match === null && event.colorId !== TAG_COLOR_ID) return null;
-  if (match === null || match[1] === undefined) return DEFAULT_BUFFER;
-  return parsePadding(match[1]);
+  if (match !== null && match[1] !== undefined) return parsePadding(match[1]);
+  // Default padding never exceeds the event's own length — a 15 min meeting
+  // gets 15 min buffers, not the full default
+  const duration =
+    (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) / MS_PER_MINUTE;
+  return {
+    before: Math.min(DEFAULT_BUFFER.before, duration),
+    after: Math.min(DEFAULT_BUFFER.after, duration),
+  };
 }
 
 /** "45" → 45 min both sides; "15/60" → 15 before, 60 after. Throws on garbage. */

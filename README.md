@@ -15,7 +15,8 @@ included, so the calendar never accumulates history.
 ## Usage
 
 - **Tag**: right-click the event → color **Graphite**. That's the whole
-  workflow — buffers of 30 min each side appear on their own.
+  workflow — buffers of 30 min each side appear on their own (capped at the
+  event's own length, so a 15 min meeting gets 15 min buffers).
 - **Custom padding**: add `#buffer 15/60` to the event description
   (15 min before / 60 after). `#buffer 45` means 45 both sides. A `#buffer`
   tag also works without the color.
@@ -43,7 +44,7 @@ via script properties (Project Settings → Script properties):
 | Property | Default | Meaning |
 |---|---|---|
 | `TAG_COLOR_ID` | `8` (Graphite) | [Color ID 1–11](https://developers.google.com/apps-script/reference/calendar/event-color) that marks an event for buffering |
-| `DEFAULT_BUFFER` | `30/30` | Padding minutes when the event has no `#buffer` override — `45` = both sides, `15/60` = before/after |
+| `DEFAULT_BUFFER` | `30/30` | Padding minutes when the event has no `#buffer` override — `45` = both sides, `15/60` = before/after; capped at the event's own duration (an explicit `#buffer` isn't) |
 | `BLOCK_CALENDAR_NAME` | `Block` | Calendar the buffers are written to |
 | `BUFFER_TITLE` | `Block` | Title of the buffer events (existing buffers are renamed on the next sweep) |
 | `WATCHED_CALENDARS` | `primary` | Comma-separated calendar names or IDs to scan; re-run `install()` after changing so the triggers match |
