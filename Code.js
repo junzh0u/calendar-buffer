@@ -166,14 +166,20 @@ function reconcileLocked() {
     }
   }
 
-  // Leftovers: source deleted, un-tagged, moved, or declined since creation
+  // Leftovers: source deleted, un-tagged, moved, or declined since creation.
+  // A block already in progress is left alone — a just-ended meeting drops out
+  // of the source window above, orphaning its still-live post buffer; don't
+  // delete time you're already inside. The past-purge reaps it once it ends.
+  let removed = 0;
   for (const orphan of existing.values()) {
+    if (new Date(orphan.start.dateTime) <= now) continue;
     Calendar.Events.remove(blockCalendarId, orphan.id);
+    removed++;
   }
 
   console.log(
     `${desired.size} blocks desired: ${created} created, ${updated} updated, ` +
-      `${existing.size} removed, ${purged} past events purged`
+      `${removed} removed, ${purged} past events purged`
   );
 }
 
