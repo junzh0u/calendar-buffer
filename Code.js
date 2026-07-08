@@ -3,7 +3,9 @@
  *
  * Watches the primary calendar for events tagged with the reserved color
  * (default Graphite) or a "#buffer" description tag; for each, maintains
- * Busy "Block" events before and after it on the Block calendar. The sync is
+ * Busy "Block" events before and after it on the Block calendar. Buffers
+ * that overlap or touch merge into a single block, so back-to-back tagged
+ * meetings get one continuous event instead of a pile. The sync is
  * a stateless reconcile — buffers follow the source event when it moves, and
  * disappear when it is deleted or un-tagged. Every run also purges all past
  * events from the Block calendar, hand-made ones included. Runs on a
@@ -63,8 +65,8 @@ function reconcileLocked() {
   const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * MS_PER_MINUTE);
   const blockCalendarId = resolveCalendarId(BLOCK_CALENDAR_NAME);
 
-  // Desired state: a pre and post buffer for every tagged event in the horizon
-  const desired = new Map();
+  // Wanted buffers: a pre and post buffer for every tagged event in the horizon
+  const buffers = [];
   for (const calendarId of WATCHED_CALENDARS) {
     const events = listEvents(calendarId, {
       timeMin: now.toISOString(),
@@ -78,10 +80,13 @@ function reconcileLocked() {
       if (isDeclined(event)) continue;
       const start = new Date(event.start.dateTime);
       const end = new Date(event.end.dateTime);
-      addDesired(desired, event, 'pre', new Date(start.getTime() - padding.before * MS_PER_MINUTE), start, now);
-      addDesired(desired, event, 'post', end, new Date(end.getTime() + padding.after * MS_PER_MINUTE), now);
+      addBuffer(buffers, event, 'pre', new Date(start.getTime() - padding.before * MS_PER_MINUTE), start, now);
+      addBuffer(buffers, event, 'post', end, new Date(end.getTime() + padding.after * MS_PER_MINUTE), now);
     }
   }
+
+  // Desired state: overlapping or touching buffers merged into single blocks
+  const desired = mergeBuffers(buffers);
 
   // Purge everything on the Block calendar that already ended — hand-made
   // events included, this is the one place the script touches them. Keeps
@@ -109,7 +114,9 @@ function reconcileLocked() {
   });
   for (const event of managed) {
     const props = event.extendedProperties.private;
-    existing.set(bufferKey(props.source, props.role), event);
+    // Pre-merge deployments stamped source/role instead of key; the fallback
+    // still matches their lone blocks, whose key is the plain buffer key
+    existing.set(props.key || bufferKey(props.source, props.role), event);
   }
 
   let created = 0;
@@ -126,7 +133,7 @@ function reconcileLocked() {
           end: { dateTime: want.end.toISOString() },
           transparency: 'opaque', // Busy
           reminders: { useDefault: false }, // buffers shouldn't notify
-          extendedProperties: { private: { app: APP_TAG, source: want.source, role: want.role } },
+          extendedProperties: { private: { app: APP_TAG, key } },
         },
         blockCalendarId
       );
@@ -157,7 +164,7 @@ function reconcileLocked() {
   }
 
   console.log(
-    `${desired.size} buffers desired: ${created} created, ${updated} updated, ` +
+    `${desired.size} blocks desired: ${created} created, ${updated} updated, ` +
       `${existing.size} removed, ${purged} past events purged`
   );
 }
@@ -190,19 +197,60 @@ function parsePadding(text) {
 }
 
 /** Record one wanted buffer, skipping empty ones and those already over. */
-function addDesired(desired, source, role, start, end, now) {
+function addBuffer(buffers, source, role, start, end, now) {
   if (end <= start || end <= now) return;
-  desired.set(bufferKey(source.id, role), {
-    source: source.id,
-    role,
+  buffers.push({
+    key: bufferKey(source.id, role),
     start,
     end,
-    description: `Buffer for "${source.summary || '(untitled)'}"`,
+    title: source.summary || '(untitled)',
   });
+}
+
+/**
+ * Merge overlapping or touching buffers into blocks: one calendar event per
+ * contiguous run, keyed by its member buffers so the reconcile can diff it.
+ */
+function mergeBuffers(buffers) {
+  const sorted = [...buffers].sort((a, b) => a.start - b.start);
+  const desired = new Map();
+  let block = null;
+  const flush = () => {
+    if (block === null) return;
+    desired.set(blockKey(block.keys), {
+      start: block.start,
+      end: block.end,
+      description: `Buffer for ${block.titles.map((title) => `"${title}"`).join(', ')}`,
+    });
+  };
+  for (const buffer of sorted) {
+    if (block !== null && buffer.start <= block.end) {
+      if (buffer.end > block.end) block.end = buffer.end;
+      block.keys.push(buffer.key);
+      if (!block.titles.includes(buffer.title)) block.titles.push(buffer.title);
+    } else {
+      flush();
+      block = { start: buffer.start, end: buffer.end, keys: [buffer.key], titles: [buffer.title] };
+    }
+  }
+  flush();
+  return desired;
 }
 
 function bufferKey(sourceId, role) {
   return `${sourceId}:${role}`;
+}
+
+/**
+ * Stable identity for a block: its member buffer keys, sorted — so a block
+ * is patched when only its times or sources' titles change, and replaced
+ * when its membership does. A lone buffer's block key is its plain buffer
+ * key. Hashed when too long for an extendedProperties value (1024 chars).
+ */
+function blockKey(keys) {
+  const joined = [...new Set(keys)].sort().join('|');
+  if (joined.length <= 1000) return joined;
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, joined));
 }
 
 function isDeclined(event) {

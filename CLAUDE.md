@@ -6,16 +6,21 @@ color-tagged Google Calendar events. What/why and usage: see README.md.
 ## Architecture
 
 - Single stateless `reconcile()`: desired buffers (from tagged events in the
-  next `HORIZON_DAYS`) diffed against existing managed buffers (all future,
-  unbounded — so orphans from sources moved beyond the horizon still get
-  cleaned up). Insert/patch/remove the difference; no stored state.
+  next `HORIZON_DAYS`, overlapping/touching ones merged into single blocks)
+  diffed against existing managed buffers (all future, unbounded — so
+  orphans from sources moved beyond the horizon still get cleaned up).
+  Insert/patch/remove the difference; no stored state.
 - Every run also purges **all** past events from the Block calendar —
   hand-made ones included, by design. This is the only write path that
   ignores the managed-buffer marker.
 - Managed buffers are identified by `extendedProperties.private`
-  (`app=calendar-buffer`, source event ID, pre/post role) and filtered
-  server-side via `privateExtendedProperty` — future hand-made events on the
-  Block calendar are invisible to the script (past ones get purged).
+  (`app=calendar-buffer` plus a `key` listing the member buffers as
+  `sourceId:role` sorted and `|`-joined; events from pre-merge deployments
+  carry `source`/`role` instead and match via a read-time fallback) and
+  filtered server-side via `privateExtendedProperty` — future hand-made
+  events on the Block calendar are invisible to the script (past ones get
+  purged). A block whose membership changes is removed + reinserted, not
+  patched.
 - Uses the **Calendar advanced service** (manifest `enabledAdvancedServices`),
   not `CalendarApp`, for `transparency`, `extendedProperties`, and
   `singleEvents` recurrence expansion. `CalendarApp` is used only to resolve

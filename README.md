@@ -24,7 +24,9 @@ included, so the calendar never accumulates history.
   keeping the color.
 
 Declined invitations and all-day events are skipped. Recurring events get
-buffers per instance, out to the 14-day horizon.
+buffers per instance, out to the 14-day horizon. Buffers that overlap or
+touch — e.g. around back-to-back tagged meetings — merge into one
+continuous Block event.
 
 ## Setup
 
