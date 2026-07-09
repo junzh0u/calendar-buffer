@@ -5,8 +5,8 @@
  * (default Graphite) or a "#buffer" description tag; for each, maintains
  * Busy "Block" events before and after it on the Block calendar. Buffers
  * only claim free time: they shrink out of the way of real Busy events on
- * the watched calendars, and buffers that overlap or touch each other merge
- * into a single block. The sync is
+ * the watched calendars (and hand-made events on the Block calendar), and
+ * buffers that overlap or touch each other merge into a single block. The sync is
  * a stateless reconcile — buffers follow the source event when it moves, and
  * disappear when it is deleted or un-tagged. Every run also purges all past
  * events from the Block calendar, hand-made ones included. Runs on a
@@ -28,7 +28,8 @@
  */
 
 // Marker stored in each managed event's private extended properties; manual
-// events on the Block calendar lack it and are never touched.
+// events on the Block calendar lack it, so they're never managed as buffers —
+// only read as busy time to pad around, and purged once they're past.
 const APP_TAG = 'calendar-buffer';
 
 const SCRIPT_PROPS = PropertiesService.getScriptProperties();
@@ -90,6 +91,25 @@ function reconcileLocked() {
     }
   }
 
+  // Future Block-calendar events play two roles. Our own managed buffers are
+  // the existing state to diff against — listed unbounded (no timeMax) so
+  // orphans from sources moved beyond the horizon still get cleaned up; the
+  // past-purge below handles anything already ended. Any hand-made events
+  // there are blocked time a buffer shouldn't pad, so fold them into busy
+  // alongside the watched-calendar meetings — buffers shrink out of their way
+  // too. No server-side app-tag filter here: we need to see the hand-made ones.
+  const existing = new Map();
+  for (const event of listEvents(blockCalendarId, { timeMin: now.toISOString(), singleEvents: true })) {
+    const props = event.extendedProperties && event.extendedProperties.private;
+    if (props && props.app === APP_TAG) {
+      // Pre-merge deployments stamped source/role instead of key; the fallback
+      // still matches their lone blocks, whose key is the plain buffer key.
+      existing.set(props.key || bufferKey(props.source, props.role), event);
+    } else if (event.start.dateTime && event.transparency !== 'transparent') {
+      busy.push({ start: new Date(event.start.dateTime), end: new Date(event.end.dateTime) });
+    }
+  }
+
   // Desired state: buffers shrunk out of the time Busy events occupy — a
   // buffer only pads free time — then overlapping or touching survivors
   // merged into single blocks
@@ -98,7 +118,7 @@ function reconcileLocked() {
 
   // Purge everything on the Block calendar that already ended — hand-made
   // events included, this is the one place the script touches them. Keeps
-  // the calendar (and the managed listing below) from growing forever.
+  // the calendar (and the future listing above) from growing forever.
   let purged = 0;
   const pastEvents = listEvents(blockCalendarId, {
     timeMax: now.toISOString(),
@@ -110,21 +130,6 @@ function reconcileLocked() {
     if (end > now) continue;
     Calendar.Events.remove(blockCalendarId, event.id);
     purged++;
-  }
-
-  // Existing state: all future managed buffers, unbounded so orphans from
-  // sources moved beyond the horizon still get cleaned up (the purge above
-  // already handled the past)
-  const existing = new Map();
-  const managed = listEvents(blockCalendarId, {
-    timeMin: now.toISOString(),
-    privateExtendedProperty: `app=${APP_TAG}`,
-  });
-  for (const event of managed) {
-    const props = event.extendedProperties.private;
-    // Pre-merge deployments stamped source/role instead of key; the fallback
-    // still matches their lone blocks, whose key is the plain buffer key
-    existing.set(props.key || bufferKey(props.source, props.role), event);
   }
 
   let created = 0;

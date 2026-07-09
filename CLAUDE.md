@@ -7,21 +7,27 @@ color-tagged Google Calendar events. What/why and usage: see README.md.
 
 - Single stateless `reconcile()`: desired buffers (from tagged events in the
   next `HORIZON_DAYS`, shrunk out of the way of Busy events on the watched
-  calendars, then overlapping/touching ones merged into single blocks)
-  diffed against existing managed buffers (all future, unbounded — so
-  orphans from sources moved beyond the horizon still get cleaned up).
-  Insert/patch/remove the difference; no stored state.
+  calendars **and hand-made events on the Block calendar**, then
+  overlapping/touching ones merged into single blocks) diffed against existing
+  managed buffers (all future, unbounded — so orphans from sources moved beyond
+  the horizon still get cleaned up). Insert/patch/remove the difference; no
+  stored state. The in-progress guard in the orphan sweep means a block you're
+  currently inside is never deleted mid-flight — the past-purge reaps it once
+  it ends.
 - Every run also purges **all** past events from the Block calendar —
   hand-made ones included, by design. This is the only write path that
   ignores the managed-buffer marker.
 - Managed buffers are identified by `extendedProperties.private`
   (`app=calendar-buffer` plus a `key` listing the member buffers as
   `sourceId:role` sorted and `|`-joined; events from pre-merge deployments
-  carry `source`/`role` instead and match via a read-time fallback) and
-  filtered server-side via `privateExtendedProperty` — future hand-made
-  events on the Block calendar are invisible to the script (past ones get
-  purged). A block whose membership changes is removed + reinserted, not
-  patched.
+  carry `source`/`role` instead and match via a read-time fallback). The
+  reconcile lists **all** future Block-calendar events in one call (no
+  server-side `privateExtendedProperty` filter) and partitions them: tagged
+  ones become the existing managed state to diff against; hand-made ones (no
+  marker, timed, non-transparent) are folded into the `busy` list so buffers
+  shrink around them. The script still never patches or removes a hand-made
+  event as a managed buffer — it only reads them as busy, and purges them once
+  past. A block whose membership changes is removed + reinserted, not patched.
 - Uses the **Calendar advanced service** (manifest `enabledAdvancedServices`),
   not `CalendarApp`, for `transparency`, `extendedProperties`, and
   `singleEvents` recurrence expansion. `CalendarApp` is used only to resolve

@@ -28,7 +28,9 @@ buffers per instance, out to the 14-day horizon. Buffers only claim free
 time: they shrink out of the way of Busy events on the watched calendars
 (a meeting butted right against a tagged event leaves no buffer between
 them), and buffers that overlap or touch each other merge into one
-continuous Block event.
+continuous Block event. Hand-made events you add to the Block calendar
+count as busy time too, so buffers shrink around them — a way to carve out
+time the script should leave unpadded without editing the source event.
 
 ## Setup
 
