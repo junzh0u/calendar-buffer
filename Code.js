@@ -105,6 +105,14 @@ function reconcileLocked() {
       // Pre-merge deployments stamped source/role instead of key; the fallback
       // still matches their lone blocks, whose key is the plain buffer key.
       existing.set(props.key || bufferKey(props.source, props.role), event);
+      // A block already in progress is never removed (see the orphan sweep
+      // below), so its span is blocked time like any hand-made event: fold it
+      // into busy. Otherwise, when a merged block's earliest member ends, the
+      // block is re-keyed into an orphan and the surviving members would be
+      // re-inserted as duplicates on top of the kept block.
+      if (new Date(event.start.dateTime) <= now) {
+        busy.push({ start: new Date(event.start.dateTime), end: new Date(event.end.dateTime) });
+      }
     } else if (event.start.dateTime && event.transparency !== 'transparent') {
       busy.push({ start: new Date(event.start.dateTime), end: new Date(event.end.dateTime) });
     }
