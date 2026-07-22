@@ -11,7 +11,6 @@ post_setup() {
   2. Tag a calendar event with the Graphite color to test
 EOF
 }
-done_note="Done. Code updated; triggers unchanged."
 
 # ── clasp deploy core (runner → login → create-on-first-run → push) ──
 pre_push
@@ -56,5 +55,5 @@ if $first_deploy; then
     post_setup
     $clasp open-script
 else
-    echo $done_note
+    echo "Done. Code updated; triggers and any script properties unchanged."
 fi
