@@ -115,6 +115,18 @@ function reconcileLocked() {
       }
     } else if (event.start.dateTime && event.transparency !== 'transparent') {
       busy.push({ start: new Date(event.start.dateTime), end: new Date(event.end.dateTime) });
+    } else if (event.start.date) {
+      // Hand-made all-day event on the Block calendar blocks the whole day(s)
+      // it spans. All-day events default to Free, but on this dedicated calendar
+      // the intent is unambiguous, so it's busy regardless of transparency.
+      // Date-only bounds are parsed as local midnight (the script's timezone is
+      // the calendar's) rather than UTC, so the block lines up with the local
+      // day; end.date is exclusive (the day after the last), already the right
+      // upper bound.
+      busy.push({
+        start: new Date(event.start.date + 'T00:00:00'),
+        end: new Date(event.end.date + 'T00:00:00'),
+      });
     }
   }
 

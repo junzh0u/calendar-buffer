@@ -24,8 +24,11 @@ color-tagged Google Calendar events. What/why and usage: see README.md.
   reconcile lists **all** future Block-calendar events in one call (no
   server-side `privateExtendedProperty` filter) and partitions them: tagged
   ones become the existing managed state to diff against; hand-made ones (no
-  marker, timed, non-transparent) are folded into the `busy` list so buffers
-  shrink around them. The script still never patches or removes a hand-made
+  marker) are folded into the `busy` list so buffers shrink around them —
+  timed ones only if non-transparent, all-day ones always (a Block-calendar
+  all-day event is an unambiguous whole-day block, so transparency is ignored;
+  its date-only bounds are read as local midnight, end exclusive). The script
+  still never patches or removes a hand-made
   event as a managed buffer — it only reads them as busy, and purges them once
   past. A block whose membership changes is removed + reinserted, not patched.
 - Uses the **Calendar advanced service** (manifest `enabledAdvancedServices`),
